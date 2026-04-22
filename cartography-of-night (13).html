@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartography of Night — Pablo Neruda</title>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#010108}
+body{font-family:'IM Fell English',serif}
+canvas{position:fixed;inset:0;z-index:1}
+
+#overlay{
+  position:fixed;inset:0;z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:#010108;
+  transition:opacity 3.5s cubic-bezier(0.4,0,0.1,1);
+}
+#overlay.out{opacity:0;pointer-events:none}
+.ov-eyebrow{font-family:'Cinzel',serif;font-weight:300;font-size:0.58rem;letter-spacing:0.55em;text-transform:uppercase;color:rgba(160,148,200,0.30);margin-bottom:26px}
+.ov-title{font-family:'IM Fell English',serif;font-style:italic;font-size:clamp(1.9rem,5vw,3.6rem);color:rgba(218,210,245,0.82);line-height:1.18;text-align:center;letter-spacing:0.03em;text-shadow:0 0 80px rgba(100,80,200,0.35)}
+.ov-rule{width:1px;height:36px;background:linear-gradient(to bottom,transparent,rgba(160,148,200,0.22),transparent);margin:30px auto}
+.ov-poet{font-family:'IM Fell English',serif;font-style:italic;font-size:0.85rem;color:rgba(160,148,200,0.28);letter-spacing:0.14em;margin-bottom:60px;text-align:center;max-width:90vw;padding:0 16px}
+#begin-btn{font-family:'Cinzel',serif;font-weight:300;font-size:0.62rem;letter-spacing:0.46em;text-transform:uppercase;color:rgba(160,148,200,0.36);background:transparent;border:none;padding:8px 2px;cursor:pointer;outline:none;border-bottom:1px solid rgba(160,148,200,0.14);transition:color .6s,text-shadow .6s}
+#begin-btn:hover{color:rgba(210,200,255,0.75);text-shadow:0 0 24px rgba(130,110,240,0.45)}
+
+#tooltip{position:fixed;z-index:50;pointer-events:none;font-family:'IM Fell English',serif;font-style:italic;font-size:0.80rem;letter-spacing:0.07em;color:rgba(200,192,240,0.65);white-space:nowrap;opacity:0;transition:opacity 0.25s;text-shadow:0 0 10px rgba(100,80,200,0.5)}
+
+#attr{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10;text-align:center;opacity:0;transition:opacity 2.5s ease;pointer-events:none}
+#attr.on{opacity:1}
+#attr .t1{font-family:'Cinzel',serif;font-weight:300;font-size:0.54rem;letter-spacing:0.32em;text-transform:uppercase;color:rgba(160,148,200,0.18)}
+#attr .t2{font-family:'IM Fell English',serif;font-style:italic;font-size:0.66rem;letter-spacing:0.12em;color:rgba(160,148,200,0.12);margin-top:4px}
+#hint{position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:10;font-family:'IM Fell English',serif;font-style:italic;font-size:0.70rem;letter-spacing:0.10em;color:rgba(160,148,200,0.16);opacity:0;transition:opacity 2.5s ease;pointer-events:none;white-space:nowrap}
+#hint.on{opacity:1}
+
+@media(max-width:600px){
+  .ov-poet{font-size:0.78rem;letter-spacing:0.08em;padding:0 24px}
+  .ov-title{font-size:clamp(1.6rem,7vw,2.4rem)}
+}
+</style>
+</head>
+<body>
+<div id="overlay">
+  <div class="ov-eyebrow">Pablo Neruda</div>
+  <div class="ov-title">Tonight I Can Write<br>the Saddest Lines</div>
+  <div class="ov-rule"></div>
+  <div class="ov-poet">Twenty Love Poems and a Song of Despair · tr. W.S. Merwin</div>
+  <button id="begin-btn" onclick="begin()">chart the sky</button>
+</div>
+<canvas id="c"></canvas>
+<div id="tooltip"></div>
+<div id="hint">drag to move · click to name the unnamed</div>
+<div id="attr">
+  <div class="t1">Cartography of Night</div>
+  <div class="t2">Tonight I Can Write — Pablo Neruda</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// POEM
+// ─────────────────────────────────────────────────────────────────────────────
+const POEM_LINES = [
+  "Tonight I can write the saddest lines.",
+  "Write, for example, the night is shattered",
+  "and the blue stars shiver in the distance.",
+  "The night wind revolves in the sky and sings.",
+  "Tonight I can write the saddest lines.",
+  "I loved her, and sometimes she loved me too.",
+  "Through nights like this one I held her in my arms.",
+  "I kissed her again and again under the endless sky.",
+  "She loved me, sometimes I loved her too.",
+  "How could one not have loved her great still eyes.",
+  "Tonight I can write the saddest lines.",
+  "To think that I do not have her. To feel that I have lost her.",
+  "To hear the immense night, still more immense without her.",
+  "And the verse falls to the soul like dew to the pasture.",
+  "What does it matter that my love could not keep her.",
+  "The night is shattered and she is not with me.",
+  "This is all. In the distance someone is singing. In the distance.",
+  "My soul is not satisfied that it has lost her.",
+  "My love tried to give her my kiss which could not save her.",
+  "She loved me, sometimes I loved her too.",
+  "One who has loved should not say: my love is over.",
+  "Because through nights like this one I saw her.",
+  "And my soul is not satisfied that it has lost her.",
+  "Though this be the last pain that she makes me suffer",
+  "and these the last verses that I write for her."
+];
+const TTS_FULL = POEM_LINES.join(' ');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLUSTERS
+// ─────────────────────────────────────────────────────────────────────────────
+const CLUSTERS = {
+  // cold steel-blue — O-type stars in Hubble deep field
+  night:  { words:['night','nights','shattered','distance','sky','immense','endless','blue','shiver','wind','revolves','sings','stars','dark'], color:[148,162,198], zone:[0.18,0.28] },
+  // dusty rose — faded elliptical galaxies at redshift
+  love:   { words:['love','loved','loving','love,','her','she','kiss','kissed','arms','held','her.','her,','eyes'], color:[192,150,148], zone:[0.52,0.32] },
+  // muted lavender — interstellar dust
+  grief:  { words:['lost','lose','loss','lost.','lost,','saddest','sad','pain','suffer','matter','satisfied','satisfied.','without'], color:[155,142,185], zone:[0.76,0.56] },
+  // pale celadon — distant blue compact galaxies
+  soul:   { words:['soul','soul.','heart','verse','write','write,','lines.','lines,','verse,','dew','pasture','falls'], color:[135,172,165], zone:[0.28,0.68] },
+  // warm parchment-amber — K/G-type stars
+  time:   { words:['tonight','tonight.','tonight,','one,','one.','last','sometimes','again','again,','through','still'], color:[195,170,118], zone:[0.68,0.24] },
+  // soft sage — green-tinted irregular galaxies
+  self:   { words:['i','me','me.','me,','my','mine','myself','not'], color:[145,168,145], zone:[0.50,0.70] },
+};
+
+function getCluster(word) {
+  const w = word.toLowerCase().replace(/[""'']/g,'');
+  for (const [id,cl] of Object.entries(CLUSTERS)) if (cl.words.includes(w)) return id;
+  return null;
+}
+const HEAVY = ['love','night','her','lost','saddest','soul','kiss','arms','immense','shattered','write','pain','last','suffer','satisfied','again','distance','blue','stars','sky','verse'];
+function getWeight(word) {
+  const w = word.toLowerCase().replace(/[""''.,;:]/g,'');
+  if (HEAVY.includes(w)) return 0.85+Math.random()*0.15;
+  if (w.length<=2) return 0.18+Math.random()*0.12;
+  return 0.38+Math.random()*0.24;
+}
+
+// Per-star colour: each star gets a unique hue variation within its cluster's
+// colour family. We shift hue ±25° and lightness ±18% from the cluster base.
+function varyColor(baseColor, seed) {
+  // Convert RGB → HSL, jitter H and L, convert back
+  const [r,g,b] = baseColor.map(v=>v/255);
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), delta=max-min;
+  let h=0, s=0, l=(max+min)/2;
+  if (delta>0) {
+    s = delta / (1 - Math.abs(2*l-1));
+    if (max===r) h=((g-b)/delta)%6;
+    else if (max===g) h=(b-r)/delta+2;
+    else h=(r-g)/delta+4;
+    h = h/6;
+    if (h<0) h+=1;
+  }
+  // Deterministic jitter from seed
+  const rng = (s2,lo,hi) => { const v=Math.abs(Math.sin(s2*127.1+311.7)*43758.5453); return lo+(v-Math.floor(v))*(hi-lo); };
+  h = (h + rng(seed*3, -0.068, 0.068) + 1) % 1;
+  l = Math.max(0.30, Math.min(0.72, l + rng(seed*7, -0.14, 0.14)));
+  s = Math.max(0.10, Math.min(0.42, s + rng(seed*11, -0.10, 0.10)));
+  // HSL → RGB
+  const c2 = (1-Math.abs(2*l-1))*s;
+  const x2 = c2*(1-Math.abs((h*6)%2-1));
+  const m  = l-c2/2;
+  let rr,gg,bb;
+  const h6=h*6;
+  if(h6<1){rr=c2;gg=x2;bb=0;}else if(h6<2){rr=x2;gg=c2;bb=0;}
+  else if(h6<3){rr=0;gg=c2;bb=x2;}else if(h6<4){rr=0;gg=x2;bb=c2;}
+  else if(h6<5){rr=x2;gg=0;bb=c2;}else{rr=c2;gg=0;bb=x2;}
+  return [Math.round((rr+m)*255), Math.round((gg+m)*255), Math.round((bb+m)*255)];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CANVAS
+// ─────────────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W, H;
+let animT = 0;
+let bgCanvas, bgCtx;
+
+// Device capability detection
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const isLowEnd = isMobile && (navigator.hardwareConcurrency || 4) <= 4;
+// FPS target: 60 desktop, 30 mobile, 24 low-end
+const TARGET_FPS = isLowEnd ? 24 : (isMobile ? 30 : 60);
+const FRAME_MS   = 1000 / TARGET_FPS;
+let lastFrameTime = 0;
+
+let stars       = [];
+let activeStars = [];
+let speakingIdx = -1;
+let edges       = [];
+
+// Drag
+let dragging = null, dragOffX = 0, dragOffY = 0, hovered = null;
+
+// Word data
+let wordList = [];
+let started  = false;
+let voices   = [], chosenVoice = null;
+let currentLineI = -1, charOffset = 0;
+
+// Audio
+let audioCtx = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHUBERT D.334 — Web Audio synthesis
+// Minuet in A major: hand-transcribed melody + bass outline
+// Notes encoded as [midi, durationBeats]
+// ─────────────────────────────────────────────────────────────────────────────
+const BPM   = 126;   // gentle minuet tempo
+const BEAT  = 60 / BPM;
+const BAR   = BEAT * 3; // 3/4 time
+
+// MIDI note → frequency
+function midiToHz(m){ return 440 * Math.pow(2,(m-69)/12); }
+
+// Full melody of D.334 (A major, simplified for synthesis)
+// Section A (repeated), Section B (repeated)
+const MELODY = [
+  // Bar 1–4  (A section opening)
+  [69,1],[71,1],[73,1],   // A4 B4 C#5
+  [76,2],[73,1],           // E5 C#5
+  [74,2],[71,1],           // D5 B4
+  [69,3],                  // A4
+
+  // Bar 5–8
+  [73,1],[74,1],[76,1],
+  [78,2],[76,1],
+  [74,2],[71,1],
+  [73,3],
+
+  // Bar 9–12
+  [76,1],[78,1],[80,1],
+  [81,2],[80,1],
+  [78,1],[76,1],[74,1],
+  [73,3],
+
+  // Bar 13–16
+  [69,1],[71,1],[73,1],
+  [76,2],[73,1],
+  [71,2],[69,1],
+  [69,3],
+
+  // Section B (trio-like)
+  [73,1],[74,1],[76,1],
+  [78,2],[74,1],
+  [76,2],[73,1],
+  [69,3],
+
+  [71,1],[73,1],[74,1],
+  [76,2],[73,1],
+  [71,2],[69,1],
+  [69,3],
+
+  [76,1],[78,1],[80,1],
+  [81,2],[78,1],
+  [76,1],[74,1],[73,1],
+  [76,3],
+
+  [73,1],[71,1],[69,1],
+  [73,2],[71,1],
+  [69,2],[68,1],
+  [69,3],
+];
+
+// Simple bass: root on beat 1, fifth on beats 2&3
+const BASS_PATTERN = [
+  [57,1],[64,1],[64,1], // A3, E4, E4
+];
+
+let melodyTimeout  = null;
+let bassTimeout    = null;
+let musicStartTime = 0;
+
+function startMusic() {
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  // iOS Safari starts AudioContext suspended — must resume inside user gesture
+  const doStart = () => {
+    musicStartTime = audioCtx.currentTime + 0.3;
+    scheduleMelody();
+    scheduleBass();
+  };
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(doStart);
+  } else {
+    doStart();
+  }
+}
+
+// Master gain for music (low volume — background)
+function getMasterGain() {
+  if (!audioCtx._masterGain) {
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.32, audioCtx.currentTime + 4); // slow fade in
+    g.connect(audioCtx.destination);
+    audioCtx._masterGain = g;
+  }
+  return audioCtx._masterGain;
+}
+
+function playNote(freq, startTime, duration, gainVal, isHarmonic) {
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  const attack  = 0.012;
+  const release = Math.min(duration * 0.85, 1.8);
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(gainVal, startTime + attack);
+  gain.gain.setTargetAtTime(gainVal * 0.55, startTime + attack, 0.08);
+  gain.gain.setTargetAtTime(0, startTime + duration - release * 0.3, release * 0.35);
+
+  osc.connect(gain);
+  gain.connect(getMasterGain());
+
+  // Reverb send — skip on low-end mobile to save CPU
+  if (!isLowEnd) {
+    const send = audioCtx.createGain();
+    send.gain.value = 0.28;
+    gain.connect(send);
+    send.connect(getSharedReverb());
+  }
+
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.1);
+
+  // Harmonics: skip on mobile entirely to halve audio node count
+  if (!isHarmonic && !isMobile) {
+    playNote(freq * 2, startTime, duration * 0.7, gainVal * 0.18, true);
+    playNote(freq * 3, startTime, duration * 0.5, gainVal * 0.06, true);
+  }
+}
+
+// Single shared reverb node — reusing avoids per-note ConvolutionReverb creation
+let _reverbNode = null;
+function getSharedReverb() {
+  if (!_reverbNode) {
+    _reverbNode = createReverb();
+    _reverbNode.connect(getMasterGain());
+  }
+  return _reverbNode;
+}
+function createReverb() {
+  const conv   = audioCtx.createConvolver();
+  const rate   = audioCtx.sampleRate;
+  const len    = rate * 2.2;
+  const buf    = audioCtx.createBuffer(2, len, rate);
+  for (let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.2);
+  }
+  conv.buffer = buf;
+  return conv;
+}
+
+function scheduleMelody() {
+  let t = musicStartTime;
+  let noteIdx = 0;
+
+  function scheduleChunk() {
+    const chunkNotes = 8;
+    const end = Math.min(noteIdx + chunkNotes, MELODY.length);
+    for (let i=noteIdx;i<end;i++) {
+      const [midi, beats] = MELODY[i];
+      const dur = beats * BEAT * 0.92;
+      playNote(midiToHz(midi), t, dur, 0.55, false);
+      t += beats * BEAT;
+    }
+    noteIdx = end;
+
+    if (noteIdx >= MELODY.length) {
+      // Loop: reset to start
+      noteIdx = 0;
+      musicStartTime = t;
+    }
+
+    // Schedule next chunk slightly before current ends
+    const delay = Math.max(0, (t - audioCtx.currentTime - 0.5) * 1000);
+    melodyTimeout = setTimeout(scheduleChunk, delay);
+  }
+  scheduleChunk();
+}
+
+function scheduleBass() {
+  let t = musicStartTime;
+  const bassNotes = [
+    [45,1],[52,1],[52,1], // A2 E3 E3
+    [45,1],[52,1],[52,1],
+    [50,1],[57,1],[57,1], // D3 A3
+    [45,1],[52,1],[52,1],
+    [48,1],[55,1],[55,1], // C#3 G#3
+    [45,1],[52,1],[52,1],
+    [50,1],[57,1],[57,1],
+    [45,1],[52,1],[52,1],
+  ];
+  let bi = 0;
+
+  function scheduleBassPart() {
+    const end = Math.min(bi + 9, bassNotes.length);
+    for (let i=bi;i<end;i++) {
+      const [midi,beats] = bassNotes[i];
+      const dur = beats * BEAT * 0.75;
+      playNote(midiToHz(midi), t, dur, 0.22, false);
+      t += beats * BEAT;
+    }
+    bi = end;
+    if (bi >= bassNotes.length) { bi=0; }
+    const delay = Math.max(0,(t-audioCtx.currentTime-0.5)*1000);
+    bassTimeout = setTimeout(scheduleBassPart, delay);
+  }
+  scheduleBassPart();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+  resize();
+  window.addEventListener('resize', resize);
+  buildWordList();
+  buildBg();
+  attachEvents();
+  loop();
+
+  // Music: start on first overlay interaction (before button click)
+  // begin() also calls startMusic() as fallback, so this is just early-start
+  const startOnce = () => {
+    if (!audioCtx) startMusic();
+    else if (audioCtx.state === 'suspended') audioCtx.resume();
+  };
+  document.getElementById('overlay').addEventListener('click',      startOnce, {once:true});
+  document.getElementById('overlay').addEventListener('touchstart', startOnce, {once:true, passive:true});
+}
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  buildBg();
+}
+
+function buildWordList() {
+  wordList = [];
+  POEM_LINES.forEach((line,li) => {
+    line.trim().split(' ').forEach((w,wi) => {
+      if (!w) return;
+      wordList.push({word:w, lineIdx:li, wordIdx:wi, cluster:getCluster(w), weight:getWeight(w)});
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKGROUND
+// ─────────────────────────────────────────────────────────────────────────────
+function buildBg() {
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.width=W; bgCanvas.height=H;
+  bgCtx = bgCanvas.getContext('2d');
+
+  const base = bgCtx.createRadialGradient(W*.42,H*.38,0,W*.5,H*.5,Math.max(W,H)*.80);
+  base.addColorStop(0,'#080820'); base.addColorStop(.45,'#050510'); base.addColorStop(1,'#010108');
+  bgCtx.fillStyle=base; bgCtx.fillRect(0,0,W,H);
+
+  // Milky way — 3 layers
+  [[2200,0.28,'58,52,140',0.055],[1800,0.18,'80,72,170',0.038],[1200,0.40,'40,36,100',0.018]].forEach(([n,spread,color,alpha])=>{
+    for(let i=0;i<n;i++){
+      const bx=Math.random()*W;
+      const by=H*0.78-(bx/W)*(H*0.60)+(Math.random()-.5)*H*spread;
+      if(by<0||by>H) continue;
+      bgCtx.fillStyle=`rgba(${color},${Math.random()*alpha})`;
+      bgCtx.beginPath();bgCtx.arc(bx,by,Math.random()*1.0,0,Math.PI*2);bgCtx.fill();
+    }
+  });
+
+  // Micro-stars
+  [[700,0.8,0.28],[400,1.2,0.18],[120,1.9,0.22]].forEach(([n,maxR,maxA])=>{
+    for(let i=0;i<n;i++){
+      bgCtx.fillStyle=`rgba(200,195,235,${Math.random()*maxA+0.04})`;
+      bgCtx.beginPath();bgCtx.arc(Math.random()*W,Math.random()*H,Math.random()*maxR+0.2,0,Math.PI*2);bgCtx.fill();
+    }
+  });
+
+  // Nebula blobs
+  [[.28,.22,120,60,'55,40,120',.06],[.72,.65,90,50,'40,60,110',.04],[.50,.40,160,80,'60,50,130',.03]].forEach(([fx,fy,rx,ry,col,a])=>{
+    const ng=bgCtx.createRadialGradient(W*fx,H*fy,0,W*fx,H*fy,Math.max(rx,ry));
+    ng.addColorStop(0,`rgba(${col},${a})`);ng.addColorStop(1,'transparent');
+    bgCtx.fillStyle=ng;bgCtx.fillRect(0,0,W,H);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STARS
+// ─────────────────────────────────────────────────────────────────────────────
+const MARGIN = 42;
+
+function placeNewStar(wd, index) {
+  const cl = wd.cluster ? CLUSTERS[wd.cluster] : null;
+  let tx, ty;
+  if (cl) {
+    const [czx,czy] = cl.zone;
+    // Heavy words stay near their cluster anchor; light words scatter much further
+    const spread = 0.28 + (1-wd.weight)*0.42;
+    tx = czx*W + (Math.random()-.5)*spread*W;
+    ty = czy*H + (Math.random()-.5)*spread*H;
+  } else {
+    // Unclustered words: fully random across the whole screen including edges
+    tx = MARGIN + Math.random()*(W-MARGIN*2);
+    ty = MARGIN + Math.random()*(H-MARGIN*2);
+  }
+  tx = Math.max(MARGIN,Math.min(W-MARGIN,tx));
+  ty = Math.max(MARGIN,Math.min(H-MARGIN,ty));
+
+  for (let att=0;att<10;att++) {
+    let close=false;
+    for (const s of stars){const dx=s.x-tx,dy=s.y-ty;if(Math.sqrt(dx*dx+dy*dy)<18){close=true;break;}}
+    if(!close) break;
+    tx+=(Math.random()-.5)*80; ty+=(Math.random()-.5)*80;
+    tx=Math.max(MARGIN,Math.min(W-MARGIN,tx));
+    ty=Math.max(MARGIN,Math.min(H-MARGIN,ty));
+  }
+
+  const baseColor = cl ? cl.color : [155,148,210];
+  const color = varyColor(baseColor, index * 17 + tx * 0.1 + ty * 0.07);
+  const baseRadius = 1.2 + wd.weight*5.0;
+
+  // Deterministic seeds per star
+  const rngS = f => { const v=Math.abs(Math.sin(index*f+19.3)*9999); return v-Math.floor(v); };
+
+  // White star: ~22% chance — these are whiter/brighter
+  const isWhite = rngS(43.7) < 0.22;
+
+  // Brightness tier: independent of white — gives variety in halo intensity
+  // 0=dim, 1=medium, 2=bright  (roughly 40/40/20 split)
+  const bTier = rngS(71.3) < 0.40 ? 0 : rngS(71.3+11) < 0.65 ? 1 : 2;
+
+  // Coloured halo: ~30% of white stars get a coloured (cluster) halo instead of cold-white
+  const colouredHalo = isWhite && rngS(53.1) < 0.30;
+
+  // Label visibility: heavy words always show; ~25% of light words also show permanently
+  const showLabel = wd.weight > 0.78 || rngS(37.9) < 0.25;
+
+  const radius = isWhite ? baseRadius * 1.20 : baseRadius;
+
+  stars.push({
+    x:tx, y:ty,
+    word:wd.word, cluster:wd.cluster, weight:wd.weight,
+    color, radius,
+    isWhite, bTier, colouredHalo, showLabel,
+    lit:false, alpha:0,
+    pulse:Math.random()*Math.PI*2,
+    condense:0,
+    // Label state:
+    //   'auto'    — show if heavy/hovered/speaking (original logic)
+    //   'revealed' — permanently shown after click
+    labelState:'auto',
+    labelAlpha:0,   // for fade-in on reveal
+    index,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDGES
+// ─────────────────────────────────────────────────────────────────────────────
+function rebuildEdges() {
+  edges = [];
+  const lit = stars.filter(s=>s.lit);
+
+  for (let i=0;i<lit.length;i++) {
+    for (let j=i+1;j<lit.length;j++) {
+      const a=lit[i],b=lit[j];
+      if (a.cluster&&a.cluster===b.cluster) {
+        const dx=a.x-b.x,dy=a.y-b.y,dist=Math.sqrt(dx*dx+dy*dy);
+        if (dist<200+(a.weight+b.weight)*40)
+          edges.push({a:a.index,b:b.index,type:'cluster',dist,strength:(a.weight+b.weight)*.5});
+      }
+    }
+  }
+  // Sequential thread — last 12
+  for (let i=Math.max(0,activeStars.length-12);i<activeStars.length-1;i++) {
+    edges.push({a:activeStars[i].index,b:activeStars[i+1].index,type:'sequence',dist:0,strength:.3});
+  }
+
+  const seen=new Set();
+  edges=edges.filter(e=>{
+    const k=`${Math.min(e.a,e.b)}-${Math.max(e.a,e.b)}`;
+    if(seen.has(k))return false;seen.add(k);return true;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BEGIN
+// ─────────────────────────────────────────────────────────────────────────────
+function begin() {
+  document.getElementById('overlay').classList.add('out');
+  setTimeout(()=>document.getElementById('overlay').style.display='none',3800);
+  document.getElementById('attr').classList.add('on');
+  setTimeout(()=>document.getElementById('hint').classList.add('on'),8000);
+  started = true;
+  wordList.forEach((wd,i)=>placeNewStar(wd,i));
+
+  // ── Audio (must be inside user gesture for iOS) ───────────────────────────
+  if (!audioCtx) {
+    startMusic();
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  // ── Speech: must call speak() immediately inside gesture for iOS ────────────
+  // Use a silent "bridge" utterance that lasts ~3-4s while overlay fades,
+  // then chain into the real poem via onend.
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    // Speak a silent bridge at normal rate — lasts ~3s, keeps iOS context alive
+    // We use a ~40-char text at rate 1.0 which takes ~3-4 seconds
+    const bridge = new SpeechSynthesisUtterance('one two three four five six seven');
+    bridge.volume = 0;     // completely silent
+    bridge.rate   = 0.8;   // ~3 seconds duration
+    bridge.lang   = 'en-US';
+    bridge.onend  = () => initSpeech();
+    bridge.onerror= () => initSpeech();
+    window.speechSynthesis.speak(bridge);
+  } else {
+    setTimeout(() => initSpeech(), 3500);
+  }
+
+  // Android: keep speech alive (pauses bug workaround)
+  setInterval(() => {
+    if (window.speechSynthesis && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+  }, 5000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPEECH
+// ─────────────────────────────────────────────────────────────────────────────
+function initSpeech() {
+  if (!('speechSynthesis' in window)) { fallback(); return; }
+
+  let started = false;
+  function tryStart() {
+    if (started) return; // prevent double-call
+    started = true;
+    voices = window.speechSynthesis.getVoices();
+    chosenVoice = pickVoice(voices);
+    speakLines();
+  }
+
+  // Try immediately
+  if (window.speechSynthesis.getVoices().length > 0) {
+    tryStart();
+    return;
+  }
+
+  // Android: voices may not be ready yet — listen + poll
+  window.speechSynthesis.addEventListener('voiceschanged', tryStart, {once:true});
+  let polls = 0;
+  const poll = setInterval(() => {
+    if (window.speechSynthesis.getVoices().length > 0 || ++polls > 20) {
+      clearInterval(poll);
+      tryStart();
+    }
+  }, 100);
+}
+
+function pickVoice(vlist) {
+  const pref=['Samantha','Karen','Moira','Tessa','Fiona','Microsoft Aria','Microsoft Jenny','Microsoft Sonia','Google US English','Google UK English Female'];
+  for (const n of pref){const v=vlist.find(v=>v.name.includes(n)&&v.lang.startsWith('en'));if(v)return v;}
+  return vlist.find(v=>v.lang.startsWith('en'))||vlist[0]||null;
+}
+
+function speakLines() {
+  // Speak line by line with pauses between stanzas.
+  // lightWordAt receives (lineIdx, charIndexInLine) to avoid
+  // repeated-line mismatch (e.g. "Tonight I can write..." appears twice).
+  let lineIdx = 0;
+  let boundaryFired = false;
+
+  // Stanza break after these line indices (0-based)
+  const stanzaBreaks = new Set([4, 9, 14]);
+
+  function speakLine() {
+    if (lineIdx >= POEM_LINES.length) {
+      setTimeout(() => lightAllUnlit(), 300);
+      return;
+    }
+
+    const text = POEM_LINES[lineIdx];
+    const utt  = new SpeechSynthesisUtterance(text);
+    if (chosenVoice) utt.voice = chosenVoice;
+    utt.lang  = chosenVoice ? chosenVoice.lang : 'en-US';
+    utt.rate  = 0.46;
+    utt.pitch = 0.92;
+
+    const thisLine = lineIdx; // capture for closure
+    let wordCount = 0;        // count onboundary events = word index in line
+
+    utt.onboundary = (e) => {
+      if (e.name !== 'word') return;
+      boundaryFired = true;
+      // Use word COUNT (not charIndex) — immune to browser charIndex precision issues
+      lightWordByCount(thisLine, wordCount);
+      wordCount++;
+    };
+
+    utt.onend = () => {
+      forceLineWords(thisLine);
+      lineIdx++;
+      const pause = stanzaBreaks.has(thisLine) ? 2200 : 900;
+      setTimeout(speakLine, pause);
+    };
+
+    utt.onerror = () => {
+      forceLineWords(thisLine);
+      lineIdx++;
+      setTimeout(speakLine, 200);
+    };
+
+    window.speechSynthesis.speak(utt);
+  }
+
+  speakLine();
+
+  // Android fallback: if onboundary never fires at all within first 4s
+  // (accounts for slow rate + voice loading), use timer-based lighting
+  setTimeout(() => {
+    if (!boundaryFired) {
+      console.log('onboundary not supported — switching to timer fallback');
+      runTimerFallback();
+    }
+  }, 4000);
+}
+
+// Light all unlit words in a specific line (called on line end)
+function forceLineWords(lineIdx) {
+  let changed = false;
+  for (let i = 0; i < wordList.length; i++) {
+    if (wordList[i].lineIdx === lineIdx && stars[i] && !stars[i].lit) {
+      stars[i].lit = true;
+      stars[i].condense = 0;
+      speakingIdx = i;
+      activeStars.push(stars[i]);
+      changed = true;
+    }
+  }
+  if (changed) rebuildEdges();
+}
+
+// Timer-based word lighting: runs in parallel with speech when onboundary unavailable
+function runTimerFallback() {
+  // Estimate reading time per word based on rate 0.63
+  // Average English word ~ 0.35s at normal speed, scaled by rate
+  const msPerChar = (1000 / 0.46) / 15; // ~15 chars per second at rate 0.46
+  let acc = 0;
+  wordList.forEach((wd, i) => {
+    const delay = acc * msPerChar;
+    setTimeout(() => {
+      if (!stars[i] || stars[i].lit) return;
+      stars[i].lit = true;
+      stars[i].condense = 0;
+      speakingIdx = i;
+      activeStars.push(stars[i]);
+      if (i % 5 === 0) rebuildEdges(); // rebuild periodically, not every word
+    }, delay);
+    acc += wd.word.length + 1;
+  });
+  // Final rebuild
+  setTimeout(() => rebuildEdges(), acc * msPerChar + 500);
+}
+
+function fallback() {
+  // Timer-based: light each word sequentially
+  const total = TTS_FULL.length * 72;
+  let acc = 0;
+  let lineAcc = 0;
+  let prevLine = 0;
+  wordList.forEach((wd, i) => {
+    if (wd.lineIdx !== prevLine) { lineAcc = 0; prevLine = wd.lineIdx; }
+    const capturedLine = wd.lineIdx;
+    const capturedLineAcc = lineAcc;
+    setTimeout(() => lightWordAt(capturedLine, capturedLineAcc), (acc / TTS_FULL.length) * total);
+    acc += wd.word.length + 1;
+    lineAcc += wd.word.length + 1;
+  });
+}
+
+function lightWordByCount(lineIdx, wordIdxInLine) {
+  // Find the Nth word in the given line — completely immune to charIndex issues
+  let lineWordIdx = 0;
+  for (let i = 0; i < wordList.length; i++) {
+    const wd = wordList[i];
+    if (wd.lineIdx !== lineIdx) continue;
+    if (lineWordIdx === wordIdxInLine) {
+      const star = stars[i];
+      if (star && !star.lit) {
+        star.lit = true;
+        star.condense = 0;
+        speakingIdx = i;
+        activeStars.push(star);
+        if (activeStars.length % 4 === 0) rebuildEdges();
+      }
+      return;
+    }
+    lineWordIdx++;
+  }
+}
+
+// Keep old name as alias for fallback() compatibility
+function lightWordAt(lineIdx, charIndexInLine) {
+  // Char-based fallback (used by fallback timer mode)
+  let lineAcc = 0;
+  for (let i = 0; i < wordList.length; i++) {
+    const wd = wordList[i];
+    if (wd.lineIdx !== lineIdx) { lineAcc = 0; continue; }
+    const len = wd.word.length;
+    if (charIndexInLine >= lineAcc && charIndexInLine < lineAcc + len + 1) {
+      const star = stars[i];
+      if (star && !star.lit) {
+        star.lit = true; star.condense = 0;
+        speakingIdx = i;
+        activeStars.push(star);
+        if (activeStars.length % 4 === 0) rebuildEdges();
+      }
+      return;
+    }
+    lineAcc += len + 1;
+  }
+}
+
+// Force-light all words in a given poem line index (catches missed boundary events)
+function lightLineWords(lineIdx) {
+  let changed = false;
+  for (let i = 0; i < wordList.length; i++) {
+    if (wordList[i].lineIdx === lineIdx) {
+      const s = stars[i];
+      if (s && !s.lit) {
+        s.lit = true; s.condense = 0;
+        speakingIdx = i;
+        activeStars.push(s);
+        changed = true;
+      }
+    }
+  }
+  if (changed) rebuildEdges();
+}
+
+// Force-light every word that hasn't been lit (called at poem end)
+function lightAllUnlit() {
+  let changed = false;
+  stars.forEach((s, i) => {
+    if (!s.lit) {
+      s.lit = true; s.condense = 0;
+      activeStars.push(s);
+      changed = true;
+    }
+  });
+  if (changed) rebuildEdges();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOUSE / TOUCH
+// ─────────────────────────────────────────────────────────────────────────────
+function attachEvents() {
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mouseup',   onUp);
+  canvas.addEventListener('mouseleave',onUp);
+  canvas.addEventListener('click',     onClick);
+  canvas.addEventListener('touchstart',e=>{const t=e.touches[0];onDown({clientX:t.clientX,clientY:t.clientY});},{passive:true});
+  canvas.addEventListener('touchmove', e=>{const t=e.touches[0];onMove({clientX:t.clientX,clientY:t.clientY});},{passive:true});
+  canvas.addEventListener('touchend',  e=>{const wasDragging=!!dragging;onUp();if(!wasDragging&&!didDrag)onClick(e.changedTouches[0]);},{passive:true});
+}
+
+function starAt(mx,my) {
+  for (let i=stars.length-1;i>=0;i--) {
+    const s=stars[i]; if(!s.lit)continue;
+    const dx=s.x-mx,dy=s.y-my;
+    if(Math.sqrt(dx*dx+dy*dy)<Math.max(18,s.radius*3)) return s;
+  }
+  return null;
+}
+
+let didDrag = false;
+
+function onMove(e) {
+  const mx=e.clientX,my=e.clientY;
+  if (dragging) {
+    dragging.x=mx+dragOffX;
+    dragging.y=my+dragOffY;
+    dragging.x=Math.max(MARGIN,Math.min(W-MARGIN,dragging.x));
+    dragging.y=Math.max(MARGIN,Math.min(H-MARGIN,dragging.y));
+    rebuildEdges();
+    canvas.style.cursor='grabbing';
+    tooltip.style.opacity='0';
+    didDrag=true;
+    return;
+  }
+  hovered=starAt(mx,my);
+  if (hovered) {
+    canvas.style.cursor='grab';
+    tooltip.textContent=hovered.word;
+    tooltip.style.left=(mx+14)+'px';
+    tooltip.style.top=(my-10)+'px';
+    tooltip.style.opacity='1';
+  } else {
+    canvas.style.cursor='default';
+    tooltip.style.opacity='0';
+  }
+}
+
+function onDown(e) {
+  const s=starAt(e.clientX,e.clientY);
+  if(s){dragging=s;dragOffX=s.x-e.clientX;dragOffY=s.y-e.clientY;didDrag=false;}
+}
+
+function onUp() {
+  dragging=null;
+  canvas.style.cursor=hovered?'grab':'default';
+}
+
+function onClick(e) {
+  if (didDrag) return; // was a drag, not a click
+  const mx=e.clientX||e.clientX,my=e.clientY||e.clientY;
+  const s=starAt(mx,my);
+  if (!s) return;
+
+  // Determine if this star normally shows its label automatically
+  const autoShows = s.weight>0.78;
+
+  if (!autoShows && s.labelState==='auto') {
+    // Reveal the label permanently
+    s.labelState='revealed';
+    s.labelAlpha=0; // will fade in
+  } else if (s.labelState==='revealed') {
+    // Toggle off
+    s.labelState='auto';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAW
+// ─────────────────────────────────────────────────────────────────────────────
+function drawEdges() {
+  // On low-end mobile: only draw cluster edges, skip sequence thread
+  const edgesToDraw = isLowEnd
+    ? edges.filter(e=>e.type==='cluster').slice(0, 40)
+    : edges;
+
+  edgesToDraw.forEach(e=>{
+    const a=stars[e.a],b=stars[e.b];
+    if(!a||!b||!a.lit||!b.lit)return;
+    const [r,g,bl]=a.color;
+    const da=e.type==='cluster'
+      ? Math.max(0,1-e.dist/240)*0.13*e.strength
+      : 0.055;
+    if (da < 0.01) return;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=e.type==='cluster'
+      ? `rgba(${r},${g},${bl},${da})`
+      : `rgba(165,158,215,0.055)`;
+    ctx.lineWidth=e.type==='cluster'?0.5:0.35;
+    ctx.stroke();
+  });
+}
+
+function drawSpike(x,y,angle,length,color,alpha) {
+  const [r,g,b]=color;
+  const grd=ctx.createLinearGradient(
+    x+Math.cos(angle)*length,y+Math.sin(angle)*length,
+    x-Math.cos(angle)*length,y-Math.sin(angle)*length
+  );
+  grd.addColorStop(0,'transparent');
+  grd.addColorStop(0.45,`rgba(${r},${g},${b},${alpha*0.5})`);
+  grd.addColorStop(0.5,`rgba(255,252,255,${alpha*0.88})`);
+  grd.addColorStop(0.55,`rgba(${r},${g},${b},${alpha*0.5})`);
+  grd.addColorStop(1,'transparent');
+  ctx.beginPath();
+  ctx.moveTo(x+Math.cos(angle)*length,y+Math.sin(angle)*length);
+  ctx.lineTo(x-Math.cos(angle)*length,y-Math.sin(angle)*length);
+  ctx.strokeStyle=grd;ctx.lineWidth=0.55;ctx.stroke();
+}
+
+function drawStars() {
+  stars.forEach((s,i)=>{
+    if(!s.lit)return;
+
+    // Condensation
+    s.condense = Math.min((s.condense||0) + (isLowEnd ? 0.08 : 0.055), 1);
+    const ease = s.condense < 0.5
+      ? 2*s.condense*s.condense
+      : 1-Math.pow(-2*s.condense+2,2)/2;
+    s.alpha = ease;
+
+    const twinkle  = isMobile ? 1.0 : (0.80+Math.sin(animT*0.0014+s.pulse)*0.20);
+    const focused  = (i===speakingIdx||s===hovered);
+    const speaking = (i===speakingIdx);
+    const r        = s.radius*(focused?1.35:1)*twinkle;
+    const a        = s.alpha;
+    if (a < 0.02) return;
+
+    // Destructure color once at top of scope
+    const [cr,cg,cb] = s.color;
+
+    // Draw from offscreen cache
+    const starCanvas = getStarCanvas(s, r, a, focused, speaking);
+    if (!starCanvas || starCanvas.width < 2) return;
+    const hw = starCanvas.width/2;
+    ctx.drawImage(starCanvas, s.x-hw, s.y-hw);
+
+    // Speaking ring — drawn live (animates, not cached)
+    if (speaking) {
+      const pf=Math.sin(animT*0.010)*0.5+0.5;
+      ctx.beginPath();ctx.arc(s.x,s.y,r*(3+pf*2.5),0,Math.PI*2);
+      ctx.strokeStyle=`rgba(${cr},${cg},${cb},${0.22*pf*a})`;ctx.lineWidth=0.8;ctx.stroke();
+    }
+
+    // Labels
+    const autoShow = s.showLabel || i===speakingIdx || s===hovered;
+    const revealed = s.labelState==='revealed';
+    if ((autoShow||revealed) && a>0.35) {
+      if (revealed) s.labelAlpha = Math.min((s.labelAlpha||0)+0.02, 1);
+      let la;
+      if (s===hovered||speaking) la=0.75;
+      else if (revealed) la=0.50*(s.labelAlpha||0);
+      else la=s.weight*0.44*a;
+      const fs=11+s.weight*4+(s===hovered?2:0)+(revealed&&!autoShow?1:0);
+      ctx.save();
+      ctx.font=`italic ${fs}px 'IM Fell English',serif`;
+      ctx.fillStyle=`rgba(${cr},${cg},${cb},${la})`;
+      ctx.textAlign='left';
+      ctx.fillText(s.word, s.x+r+5, s.y+4);
+      ctx.restore();
+      if (revealed&&!autoShow) {
+        ctx.beginPath();ctx.arc(s.x,s.y+r+4,1.2,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${cr},${cg},${cb},${0.4*(s.labelAlpha||0)})`;ctx.fill();
+      }
+    } else if (!autoShow&&!revealed&&s.labelAlpha>0) {
+      s.labelAlpha=Math.max(0,s.labelAlpha-0.03);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OFFSCREEN STAR CACHE
+// Each star is pre-rendered to a small offscreen canvas and composited cheaply
+// ─────────────────────────────────────────────────────────────────────────────
+function getStarCanvas(s, r, a, focused, speaking) {
+  // Cache key — rebuild only when these change meaningfully
+  const condenseStep = Math.floor(s.condense * 20); // 20 steps total
+  const key = `${s.index}_${condenseStep}_${focused?1:0}_${speaking?1:0}`;
+  if (s._cacheKey === key) return s._canvas;
+
+  const size  = Math.max(4, Math.ceil(r * (s.isWhite ? 16 : 13) + 4));
+  const cx    = size, cy = size;
+  const dim   = size * 2;
+
+  if (!s._canvas || s._canvas.width !== dim) {
+    s._canvas = document.createElement('canvas');
+    s._canvas.width = dim;
+    s._canvas.height = dim;
+  }
+  const sc = s._canvas.getContext('2d');
+  sc.clearRect(0, 0, dim, dim);
+
+  const [cr,cg,cb] = s.color;
+  const isWhite     = s.isWhite;
+  const bTier       = s.bTier ?? 1;
+  const colouredHalo= s.colouredHalo;
+  const tierMult    = [0.55, 1.0, 1.55][bTier];
+  const spikeGrow   = Math.max(0,(s.condense-0.20)/0.80);
+
+  // Halo
+  const hR = r * (focused ? 7 : 5.5) * (isWhite ? 1.4 : 1.0);
+  const hg = sc.createRadialGradient(cx,cy,0,cx,cy,hR);
+  if (isWhite && !colouredHalo) {
+    hg.addColorStop(0,    `rgba(235,240,255,${0.30*a*tierMult})`);
+    hg.addColorStop(0.4,  `rgba(210,222,255,${0.10*a*tierMult})`);
+    hg.addColorStop(1,    'transparent');
+  } else if (isWhite && colouredHalo) {
+    hg.addColorStop(0,    `rgba(${cr},${cg},${cb},${0.28*a*tierMult})`);
+    hg.addColorStop(0.4,  `rgba(${cr},${cg},${cb},${0.08*a*tierMult})`);
+    hg.addColorStop(1,    'transparent');
+  } else {
+    hg.addColorStop(0,    `rgba(${cr},${cg},${cb},${0.18*a*tierMult})`);
+    hg.addColorStop(0.4,  `rgba(${cr},${cg},${cb},${0.05*a*tierMult})`);
+    hg.addColorStop(1,    'transparent');
+  }
+  sc.fillStyle=hg; sc.beginPath(); sc.arc(cx,cy,Math.min(hR,size-1),0,Math.PI*2); sc.fill();
+
+  // Spikes (only if condense far enough)
+  if (spikeGrow > 0.05) {
+    const spikeMult  = isWhite ? 1.4 : 1.0;
+    const spikeLen   = r*(focused?9:6)*s.weight*spikeGrow*spikeMult;
+    const spikeA     = a*(s.weight*0.8+0.2)*spikeGrow*tierMult;
+    const spikeColor = isWhite ? [220,230,255] : s.color;
+    const rot        = s.pulse * 0.3; // static rotation from pulse (no animT in cache)
+
+    function cacheSpike(ang, len, alpha) {
+      if (len < 0.5) return;
+      const [sr,sg,sb] = spikeColor;
+      const grd = sc.createLinearGradient(
+        cx+Math.cos(ang)*len, cy+Math.sin(ang)*len,
+        cx-Math.cos(ang)*len, cy-Math.sin(ang)*len
+      );
+      grd.addColorStop(0,'transparent');
+      grd.addColorStop(0.44,`rgba(${sr},${sg},${sb},${alpha*0.44})`);
+      grd.addColorStop(0.5, `rgba(232,236,250,${alpha*0.80})`);
+      grd.addColorStop(0.56,`rgba(${sr},${sg},${sb},${alpha*0.44})`);
+      grd.addColorStop(1,'transparent');
+      sc.beginPath();
+      sc.moveTo(cx+Math.cos(ang)*len, cy+Math.sin(ang)*len);
+      sc.lineTo(cx-Math.cos(ang)*len, cy-Math.sin(ang)*len);
+      sc.strokeStyle=grd; sc.lineWidth=0.55; sc.stroke();
+    }
+
+    cacheSpike(rot, spikeLen, spikeA);
+    cacheSpike(rot+Math.PI*0.5, spikeLen*0.75, spikeA*0.7);
+    if (s.weight>0.65||isWhite) {
+      cacheSpike(rot+Math.PI*0.25, spikeLen*0.45, spikeA*0.4);
+      cacheSpike(rot+Math.PI*0.75, spikeLen*0.45, spikeA*0.4);
+    }
+  }
+
+  // Core
+  const cg2 = sc.createRadialGradient(cx,cy,0,cx,cy,r);
+  if (isWhite) {
+    cg2.addColorStop(0,    `rgba(255,255,255,${0.99*a})`);
+    cg2.addColorStop(0.22, `rgba(238,244,255,${0.94*a})`);
+    cg2.addColorStop(0.55, `rgba(${cr},${cg},${cb},${0.55*a})`);
+    cg2.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+  } else {
+    cg2.addColorStop(0,    `rgba(255,253,248,${0.96*a})`);
+    cg2.addColorStop(0.35, `rgba(${cr},${cg},${cb},${0.88*a})`);
+    cg2.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+  }
+  sc.fillStyle=cg2; sc.beginPath(); sc.arc(cx,cy,r,0,Math.PI*2); sc.fill();
+
+  s._cacheKey = key;
+  return s._canvas;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOOP — FPS capped, with offscreen star compositing
+// ─────────────────────────────────────────────────────────────────────────────
+function loop(timestamp) {
+  requestAnimationFrame(loop);
+
+  // FPS cap — guard against undefined timestamp on first call
+  if (timestamp === undefined) timestamp = lastFrameTime + FRAME_MS;
+  if (timestamp - lastFrameTime < FRAME_MS) return;
+  const dt = Math.min(timestamp - lastFrameTime, 50);
+  lastFrameTime = timestamp;
+  animT += dt;
+
+  ctx.clearRect(0,0,W,H);
+  if (bgCanvas) ctx.drawImage(bgCanvas,0,0);
+  drawEdges();
+  drawStars();
+}
+
+init();
+</script>
+</body>
+</html>
